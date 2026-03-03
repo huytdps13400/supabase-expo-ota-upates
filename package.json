@@ -64,14 +64,14 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/huytdps13400/supabase-expo-ota-updates.git"
+    "url": "git+https://github.com/huytdps13400/supabase-expo-ota-upates.git"
   },
   "author": "huymobile <kingonwork@gmail.com> (https://github.com/huytdps13400)",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/huytdps13400/supabase-expo-ota-updates/issues"
+    "url": "https://github.com/huytdps13400/supabase-expo-ota-upates/issues"
   },
-  "homepage": "https://github.com/huytdps13400/supabase-expo-ota-updates#readme",
+  "homepage": "https://github.com/huytdps13400/supabase-expo-ota-upates#readme",
   "engines": {
     "node": ">=18"
   },
