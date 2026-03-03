@@ -1,0 +1,8 @@
+# Bun configuration
+[install]
+# Use exact versions
+exact = true
+
+[test]
+# Test configuration
+coverage = true

@@ -1,6 +1,26 @@
 {
-  "extends": "../tsconfig",
+  "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    // Avoid expo-cli auto-generating a tsconfig
-  }
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "paths": {
+      "supabase-expo-ota-updates": ["../src/index.tsx"],
+      "supabase-expo-ota-updates/plugin": ["../src/plugin.ts"]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "lib"
+  ]
 }

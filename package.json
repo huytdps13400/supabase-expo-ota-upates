@@ -1,25 +1,30 @@
 {
   "name": "supabase-expo-ota-updates",
   "version": "0.1.0",
-  "description": "supabase-expo-ota-updates",
-  "main": "./lib/module/index.js",
-  "types": "./lib/typescript/src/index.d.ts",
+  "description": "CLI and Expo config plugin for publishing OTA updates to Supabase Storage",
+  "main": "./lib/module/src/index.js",
+  "types": "./lib/module/src/index.d.ts",
+  "bin": {
+    "supabase-expo-ota-updates": "./bin/supabase-ota-updates.js"
+  },
   "exports": {
     ".": {
       "source": "./src/index.tsx",
-      "types": "./lib/typescript/src/index.d.ts",
-      "default": "./lib/module/index.js"
+      "types": "./lib/module/src/index.d.ts",
+      "default": "./lib/module/src/index.js"
+    },
+    "./plugin": {
+      "source": "./src/plugin.ts",
+      "types": "./lib/module/src/plugin.d.ts",
+      "default": "./lib/module/src/plugin.js"
     },
     "./package.json": "./package.json"
   },
   "files": [
     "src",
     "lib",
-    "android",
-    "ios",
-    "cpp",
+    "bin",
     "*.podspec",
-    "react-native.config.js",
     "!ios/build",
     "!android/build",
     "!android/gradle",
@@ -32,18 +37,30 @@
     "!**/.*"
   ],
   "scripts": {
-    "example": "yarn workspace supabase-expo-ota-updates-example",
-    "clean": "del-cli lib",
-    "prepare": "bob build",
-    "typecheck": "tsc",
+    "example": "cd example && bun start",
+    "clean": "rm -rf lib",
+    "prepare": "npm run clean && npm run build",
+    "build": "tsc --project tsconfig.build.json",
+    "build:plugin": "npm run build",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint \"**/*.{js,ts,tsx}\"",
-    "test": "jest",
-    "release": "release-it --only-version"
+    "test": "bun test",
+    "test:example": "cd example && bun test",
+    "release": "release-it --only-version",
+    "publish:lib": "bash ./scripts/publish-library.sh",
+    "publish:lib:patch": "bash ./scripts/publish-library.sh --type patch",
+    "publish:lib:minor": "bash ./scripts/publish-library.sh --type minor",
+    "publish:lib:major": "bash ./scripts/publish-library.sh --type major",
+    "publish:lib:dry-run": "bash ./scripts/publish-library.sh --dry-run"
   },
   "keywords": [
-    "react-native",
-    "ios",
-    "android"
+    "expo",
+    "expo-updates",
+    "supabase",
+    "ota",
+    "over-the-air",
+    "cli",
+    "config-plugin"
   ],
   "repository": {
     "type": "git",
@@ -55,6 +72,9 @@
     "url": "https://github.com/huytdps13400/supabase-expo-ota-updates/issues"
   },
   "homepage": "https://github.com/huytdps13400/supabase-expo-ota-updates#readme",
+  "engines": {
+    "node": ">=18"
+  },
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
   },
@@ -83,8 +103,16 @@
     "typescript": "^5.9.2"
   },
   "peerDependencies": {
-    "react": "*",
-    "react-native": "*"
+    "expo": ">=50.0.0",
+    "expo-updates": ">=0.24.0"
+  },
+  "peerDependenciesMeta": {
+    "expo": {
+      "optional": false
+    },
+    "expo-updates": {
+      "optional": false
+    }
   },
   "workspaces": [
     "example"

@@ -1,4 +1,12 @@
 {
   "extends": "./tsconfig",
-  "exclude": ["example", "lib"]
+  "compilerOptions": {
+    "outDir": "./lib/module",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "declaration": true,
+    "declarationMap": true,
+    "noEmit": false
+  },
+  "exclude": ["**/__tests__/**", "example", "lib", "supabase"]
 }

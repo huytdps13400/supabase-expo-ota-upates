@@ -1,0 +1,3 @@
+# Bun configuration for example project
+[test]
+coverage = true
