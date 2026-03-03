@@ -1,6 +1,6 @@
 {
   "name": "supabase-expo-ota-updates",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CLI and Expo config plugin for publishing OTA updates to Supabase Storage",
   "main": "./lib/module/src/index.js",
   "types": "./lib/module/src/index.d.ts",
