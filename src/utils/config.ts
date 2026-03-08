@@ -202,6 +202,31 @@ export function validatePublishEnv(config?: OtaConfig): {
   return { valid: missing.length === 0, missing };
 }
 
+/**
+ * Derive runtime version with async fingerprint support
+ */
+export async function deriveRuntimeVersionAsync(
+  platform: Platform,
+  override?: string,
+  config?: OtaConfig
+): Promise<string | null> {
+  if (override) return override;
+
+  // Check if fingerprint strategy is configured
+  if (config?.runtimeVersionPolicy === 'fingerprint') {
+    try {
+      const { generateFingerprint } = require('./fingerprint');
+      const hash = await generateFingerprint();
+      if (hash) return hash;
+    } catch {
+      // fingerprint generation failed, fall through
+    }
+  }
+
+  // Fall back to sync derivation
+  return deriveRuntimeVersion(platform, override, config);
+}
+
 interface ConfigTemplateOverrides {
   otaUrl?: string;
   channel?: string;

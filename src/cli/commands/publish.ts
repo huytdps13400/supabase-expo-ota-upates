@@ -8,7 +8,7 @@ import {
   normalizeChannel,
   getDefaultChannel,
   getBucket,
-  deriveRuntimeVersion,
+  deriveRuntimeVersionAsync,
   validatePublishEnv,
 } from '../../utils/config';
 import { sha256Base64Url } from '../../utils/crypto';
@@ -108,7 +108,7 @@ export async function publishCommand(args: string[]): Promise<void> {
   const platform: Platform = options.platform;
 
   // Get runtime version
-  const runtimeVersion = deriveRuntimeVersion(
+  const runtimeVersion = await deriveRuntimeVersionAsync(
     platform,
     options.runtimeVersion,
     config ?? undefined
@@ -298,12 +298,13 @@ export async function publishCommand(args: string[]): Promise<void> {
   );
   console.log(`✓ Bundle uploaded`);
 
-  // Upload assets
+  // Upload assets (parallel with concurrency limit)
   if (assets.length > 0) {
     console.log(`Uploading ${assets.length} assets...`);
-    for (let i = 0; i < assets.length; i++) {
-      const asset = assets[i]!;
-      process.stdout.write(`  ${i + 1}/${assets.length} ${asset.fileName}... `);
+    const UPLOAD_CONCURRENCY = 5;
+    let completed = 0;
+
+    async function uploadAsset(asset: AssetInfo) {
       const buffer = fs.readFileSync(asset.filePath);
       await uploadFile(
         supabaseUrl,
@@ -313,8 +314,17 @@ export async function publishCommand(args: string[]): Promise<void> {
         buffer,
         asset.contentType
       );
-      process.stdout.write('✓\n');
+      completed++;
+      process.stdout.write(
+        `\r  Uploading assets... ${completed}/${assets.length}`
+      );
     }
+
+    for (let i = 0; i < assets.length; i += UPLOAD_CONCURRENCY) {
+      const batch = assets.slice(i, i + UPLOAD_CONCURRENCY);
+      await Promise.all(batch.map(uploadAsset));
+    }
+    console.log('');
   }
 
   // Insert update record

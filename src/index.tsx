@@ -14,6 +14,9 @@ export type {
   BundleInfo,
   OtaUpdatePayload,
   OtaAssetPayload,
+  OtaUpdateRecord,
+  RollbackOptions,
+  ListOptions,
   Platform,
   Channel,
   RuntimeVersionPolicy,
@@ -44,3 +47,17 @@ export {
   sleep,
   ensureDir,
 } from './utils/files';
+
+// Runtime exports (React Native components)
+export {
+  useOtaUpdate,
+  OtaUpdater,
+  RollbackManager,
+  type UseOtaUpdateOptions,
+  type UseOtaUpdateResult,
+  type OtaUpdateInfo,
+  type OtaUpdateStatus,
+  type OtaUpdaterConfig,
+  type FallbackProps,
+  type RollbackState,
+} from './runtime';

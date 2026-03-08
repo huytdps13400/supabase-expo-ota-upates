@@ -8,6 +8,8 @@ export type RuntimeVersionPolicy =
   | 'nativeVersion'
   | 'sdkVersion'
   | 'appVersion'
+  | 'fingerprint'
+  | 'fingerprintExperimental'
   | string;
 export type CheckAutomatically =
   | 'ON_LOAD'
@@ -196,4 +198,39 @@ export interface OtaAssetPayload {
   url: string;
   storage_bucket: string;
   storage_path: string;
+}
+
+export interface OtaUpdateRecord {
+  id: string;
+  created_at: string;
+  channel: string;
+  platform: string;
+  runtime_version: string;
+  is_active: boolean;
+  is_mandatory?: boolean;
+  rollout_percentage?: number;
+  message?: string;
+  app_version?: string;
+  bundle_id?: string;
+  launch_asset_key: string;
+}
+
+export interface RollbackOptions {
+  platform: Platform;
+  channel?: Channel;
+  config?: string;
+  /** Specific update ID to rollback to */
+  to?: string;
+}
+
+export interface ListOptions {
+  platform?: Platform;
+  channel?: Channel;
+  config?: string;
+  limit?: number;
+  offset?: number;
+  /** Show only active updates */
+  active?: boolean;
+  /** Output format */
+  format?: 'table' | 'json';
 }

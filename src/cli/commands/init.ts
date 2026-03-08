@@ -1,6 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createConfigContent, createEnvExample } from '../../utils/config';
+import {
+  askQuestion,
+  askConfirm,
+  askSelect,
+  isInteractive,
+} from '../../utils/prompt';
 import type { InitOptions } from '../../types';
 import { setupCommand } from './setup';
 
@@ -36,6 +42,64 @@ function parseArgs(args: string[]): InitOptions {
   }
 
   return options;
+}
+
+/**
+ * Run interactive prompts when no flags are provided and stdin is TTY.
+ */
+async function runInteractiveInit(): Promise<void> {
+  console.log('\nSupabase Expo OTA Updates Setup\n');
+
+  const supabaseUrl = await askQuestion(
+    'Supabase project URL',
+    process.env.SUPABASE_URL
+  );
+
+  if (!supabaseUrl) {
+    console.error('Supabase URL is required.');
+    process.exit(1);
+  }
+
+  const serviceKey = await askQuestion(
+    'Service role key (optional, Enter to skip)',
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+
+  const channel = await askQuestion('Default channel', 'PRODUCTION');
+
+  const formatChoice = await askSelect(
+    'Config format:',
+    ['TypeScript', 'JavaScript', 'JSON'],
+    0
+  );
+  const formatMap: Record<string, 'ts' | 'js' | 'json'> = {
+    TypeScript: 'ts',
+    JavaScript: 'js',
+    JSON: 'json',
+  };
+  const format = formatMap[formatChoice] ?? 'ts';
+
+  const shouldDeploy = await askConfirm('Deploy to Supabase now?', true);
+
+  console.log('');
+
+  // Build setup args from interactive answers
+  const setupArgs: string[] = [];
+  setupArgs.push('--format', format);
+  setupArgs.push('--supabase-url', supabaseUrl);
+  if (serviceKey) {
+    setupArgs.push('--service-key', serviceKey);
+  }
+  if (shouldDeploy) {
+    setupArgs.push('--deploy');
+  }
+
+  // Set env vars for config generation
+  if (channel) {
+    process.env.EXPO_PUBLIC_ENV = channel.toUpperCase();
+  }
+
+  await setupCommand(setupArgs);
 }
 
 function runConfigOnlyInit(options: InitOptions): void {
@@ -81,7 +145,22 @@ export async function initCommand(args: string[]): Promise<void> {
     return;
   }
 
-  console.log('🚀 Running init (setup + deploy in one command)\n');
+  // If no flags provided and stdin is interactive, use interactive prompts
+  const hasFlags =
+    options.supabaseUrl ||
+    options.serviceKey ||
+    options.skipMigrations ||
+    options.skipFunctions ||
+    options.skipConfig ||
+    options.skipLink ||
+    options.skipDeploy;
+
+  if (!hasFlags && isInteractive()) {
+    await runInteractiveInit();
+    return;
+  }
+
+  console.log('Running init (setup + deploy in one command)\n');
 
   const setupArgs: string[] = ['--deploy'];
 

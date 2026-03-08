@@ -83,10 +83,12 @@ const withSupabaseOta: ConfigPlugin<PluginOptions> = (config, options) => {
   if (
     policy === 'nativeVersion' ||
     policy === 'sdkVersion' ||
-    policy === 'appVersion'
+    policy === 'appVersion' ||
+    policy === 'fingerprint' ||
+    policy === 'fingerprintExperimental'
   ) {
     config.runtimeVersion = {
-      policy,
+      policy: policy as any,
     };
   } else {
     // Custom runtime version string

@@ -18,6 +18,11 @@
       "types": "./lib/module/src/plugin.d.ts",
       "default": "./lib/module/src/plugin.js"
     },
+    "./runtime": {
+      "source": "./src/runtime/index.ts",
+      "types": "./lib/module/src/runtime/index.d.ts",
+      "default": "./lib/module/src/runtime/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

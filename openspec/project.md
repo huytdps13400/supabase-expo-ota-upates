@@ -1,31 +1,52 @@
-# Project Context
-
 ## Purpose
-[Describe your project's purpose and goals]
+`supabase-expo-ota-updates` is an Expo-focused npm package that provides:
+- an Expo config plugin (`supabase-expo-ota-updates/plugin`) to wire OTA updates to Supabase
+- a CLI for OTA lifecycle operations (`init`, `setup`, `publish`, `cleanup`, `cron`, `doctor`, `info`)
+- a minimal, self-service Supabase setup flow for backend tables, storage bucket, and edge functions.
 
 ## Tech Stack
-- [List your primary technologies]
-- [e.g., TypeScript, React, Node.js]
+- TypeScript, Node.js 18+
+- Bun for local scripts and package workflow
+- Expo config plugins + `expo-updates`
+- Supabase Postgres + Supabase Storage + Edge Functions
 
 ## Project Conventions
 
 ### Code Style
-[Describe your code style preferences, formatting rules, and naming conventions]
+- Formatting follows the project Prettier config: 2 spaces, single quotes, semicolons preserved by formatter.
+- Prefer small modules with explicit utility boundaries (`cli/commands`, `utils`, `plugin`, `types`).
+- Keep API surface changes explicit in `src/index.tsx`, `src/plugin.ts`, and package exports.
 
 ### Architecture Patterns
-[Document your architectural decisions and patterns]
+- Command orchestration in `src/cli` maps one file per command to keep behavior easy to review.
+- Configuration is loaded from `supabase-ota.config.{ts,js,json}` when present, with fallback to environment variables.
+- OTA publishing pipeline: build dist -> upload bundle/assets -> insert `ota_updates`/`ota_assets` rows -> return update ID.
 
 ### Testing Strategy
-[Explain your testing approach and requirements]
+- Unit tests live under `src/__tests__` using Jest.
+- Keep changes covered by tests for parse, validation, plugin behavior, and file/encoding helpers.
+- Type-level changes are validated through `bun run typecheck`.
 
 ### Git Workflow
-[Describe your branching strategy and commit conventions]
+- Conventional release flow is driven by `scripts/publish-library.sh` with `npm version` + `npm publish`.
+- Release checks: lint, typecheck, test, prepare.
+- Release commits and tags are created automatically unless disabled by flags.
 
 ## Domain Context
-[Add domain-specific knowledge that AI assistants need to understand]
+- This package is intended for Expo OTA updates backed by Supabase.
+- Typical usage: configure Expo app with plugin in `app.config`, then publish updates via CLI and consume updates through Supabase manifest endpoint.
+- Backend requires matching schema/indexes and optional retention cleanup for old updates.
 
 ## Important Constraints
-[List any technical, business, or regulatory constraints]
+- Publishing requires:
+  - `SUPABASE_URL` or `EXPO_PUBLIC_OTA_URL`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - build version variables for runtime version derivation
+- Channels are case-normalized to uppercase and must match `/^[A-Z0-9_-]+$/`.
+- `publish` requires `--platform ios|android`.
 
 ## External Dependencies
-[Document key external services, APIs, or systems]
+- Supabase CLI (for setup/deploy flows)
+- Supabase project (Postgres + Storage + Functions)
+- Expo CLI (`npx expo export`)
+- Optional: Google Chat webhook via external downstream integrations

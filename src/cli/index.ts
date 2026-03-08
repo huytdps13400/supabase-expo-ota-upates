@@ -7,6 +7,9 @@ import { cronCommand } from './commands/cron';
 import { doctorCommand } from './commands/doctor';
 import { infoCommand } from './commands/info';
 import { setupCommand } from './commands/setup';
+import { rollbackCommand } from './commands/rollback';
+import { listCommand } from './commands/list';
+import { consoleCommand } from './commands/console';
 
 const argv = process.argv.slice(2);
 const command = argv[0];
@@ -25,6 +28,9 @@ Commands:
   cron      Output SQL for scheduled cleanup
   doctor    Validate configuration
   info      Show current configuration
+  list      List OTA updates
+  rollback  Rollback to previous update
+  console   Interactive dashboard for managing updates
 
 Global Options:
   --config <path>     Path to config file
@@ -39,12 +45,23 @@ Publish Options:
   --message, -m       Update message/changelog
   --app-version       App version for semver matching
 
+List Options:
+  --active            Show only active updates
+  --format <type>     Output format (table|json)
+  --limit <n>         Number of results (default: 20)
+
+Rollback Options:
+  --to <update-id>    Rollback to a specific update ID
+
 Examples:
-  npx supabase-expo-ota-updates init --supabase-url https://<id>.supabase.co
+  npx supabase-expo-ota-updates init
   npx supabase-expo-ota-updates init --config-only --format ts
   npx supabase-expo-ota-updates setup --supabase-url https://<id>.supabase.co --deploy
   npx supabase-expo-ota-updates publish --platform ios --channel DEV
   npx supabase-expo-ota-updates publish --platform ios --channel PROD -f --rollout 50
+  npx supabase-expo-ota-updates list --platform ios --active
+  npx supabase-expo-ota-updates rollback --platform ios --channel PROD
+  npx supabase-expo-ota-updates console
   npx supabase-expo-ota-updates doctor
 `);
 }
@@ -77,6 +94,15 @@ async function main(): Promise<void> {
         break;
       case 'setup':
         await setupCommand(argv.slice(1));
+        break;
+      case 'rollback':
+        await rollbackCommand(argv.slice(1));
+        break;
+      case 'list':
+        await listCommand(argv.slice(1));
+        break;
+      case 'console':
+        await consoleCommand(argv.slice(1));
         break;
       default:
         console.error(`Unknown command: ${command}`);

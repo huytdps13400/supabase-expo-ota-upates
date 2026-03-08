@@ -1,6 +1,10 @@
 import { encodePath } from './crypto';
 import { sleep } from './files';
-import type { OtaUpdatePayload, OtaAssetPayload } from '../types';
+import type {
+  OtaUpdatePayload,
+  OtaAssetPayload,
+  OtaUpdateRecord,
+} from '../types';
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 500;
@@ -186,6 +190,117 @@ export async function callCleanupEdgeFunction(
   }
 
   return res.json();
+}
+
+/**
+ * List OTA updates with filters
+ */
+export async function listOtaUpdates(
+  supabaseUrl: string,
+  serviceKey: string,
+  filters: {
+    channel?: string;
+    platform?: string;
+    runtimeVersion?: string;
+    isActive?: boolean;
+    limit?: number;
+    offset?: number;
+  }
+): Promise<OtaUpdateRecord[]> {
+  const params = new URLSearchParams();
+  params.set(
+    'select',
+    'id,created_at,channel,platform,runtime_version,is_active,is_mandatory,rollout_percentage,message,app_version,bundle_id,launch_asset_key'
+  );
+  params.set('order', 'created_at.desc');
+
+  if (filters.channel) params.set('channel', `eq.${filters.channel}`);
+  if (filters.platform) params.set('platform', `eq.${filters.platform}`);
+  if (filters.runtimeVersion)
+    params.set('runtime_version', `eq.${filters.runtimeVersion}`);
+  if (filters.isActive !== undefined)
+    params.set('is_active', `eq.${filters.isActive}`);
+  if (filters.limit) params.set('limit', String(filters.limit));
+  if (filters.offset) params.set('offset', String(filters.offset));
+
+  const url = `${supabaseUrl}/rest/v1/ota_updates?${params}`;
+  const headers = {
+    Authorization: `Bearer ${serviceKey}`,
+    apikey: serviceKey,
+  };
+
+  const res = await fetch(url, { headers });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`List ota_updates failed ${res.status}: ${body}`);
+  }
+
+  return res.json();
+}
+
+/**
+ * Update an OTA update record
+ */
+export async function updateOtaUpdate(
+  supabaseUrl: string,
+  serviceKey: string,
+  updateId: string,
+  patch: Partial<{ is_active: boolean }>
+): Promise<void> {
+  const url = `${supabaseUrl}/rest/v1/ota_updates?id=eq.${updateId}`;
+  const headers = {
+    'Authorization': `Bearer ${serviceKey}`,
+    'apikey': serviceKey,
+    'content-type': 'application/json',
+    'Prefer': 'return=representation',
+  };
+
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify(patch),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Update ota_updates failed ${res.status}: ${body}`);
+  }
+}
+
+/**
+ * Get update stats (device update tracking)
+ */
+export async function getUpdateStats(
+  supabaseUrl: string,
+  serviceKey: string,
+  updateId: string
+): Promise<{
+  total_devices: number;
+  pending: number;
+  applied: number;
+  failed: number;
+} | null> {
+  const url = `${supabaseUrl}/rest/v1/rpc/get_update_stats`;
+  const headers = {
+    'Authorization': `Bearer ${serviceKey}`,
+    'apikey': serviceKey,
+    'content-type': 'application/json',
+  };
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ p_update_id: updateId }),
+    });
+
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.[0] ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
