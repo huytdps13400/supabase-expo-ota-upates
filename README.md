@@ -9,7 +9,7 @@ Self-hosted OTA updates for Expo apps powered by Supabase. Ship updates instantl
 
 ## Demo
 
-https://github.com/user-attachments/assets/9c39ef74-abe6-4cd9-b298-35cae3cbc10b.MP4
+https://github.com/user-attachments/assets/9c39ef74-abe6-4cd9-b298-35cae3cbc10b
 
 ## Install
 
