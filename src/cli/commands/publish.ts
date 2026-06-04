@@ -141,14 +141,14 @@ export async function publishCommand(args: string[]): Promise<void> {
     console.log(`\nBuilding update for ${platform}...`);
     if (!options.dryRun) {
       execSync(
-        `npx expo export --platform ${platform} --output-dir ${distDir}`,
+        `npx expo export --platform ${platform} --output-dir ${distDir} --clear`,
         {
           stdio: 'inherit',
         }
       );
     } else {
       console.log(
-        `[DRY RUN] Would run: npx expo export --platform ${platform} --output-dir ${distDir}`
+        `[DRY RUN] Would run: npx expo export --platform ${platform} --output-dir ${distDir} --clear`
       );
     }
   }
