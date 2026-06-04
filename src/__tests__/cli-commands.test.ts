@@ -1,12 +1,24 @@
 /**
  * Tests for CLI rollback and list commands.
- * Uses env vars instead of jest.mock to avoid bun module mock leaking.
+ *
+ * The supabase data-access layer is mocked so the commands run without a live
+ * backend. Bun's module mocks are process-global and persist across files, so:
+ *   - the factory spreads the real module, keeping every other export intact
+ *     (notably insertRollbackDirective, which rollback.ts imports and which
+ *     other suites such as supabase-utils.test.ts exercise for real), and
+ *   - afterAll restores the real module so this partial mock cannot leak into
+ *     other test files depending on file execution order.
  */
 
 const mockList = jest.fn();
 const mockUpdate = jest.fn();
 
+// Loaded before jest.mock (bun does not hoist module mocks) so it captures the
+// real implementations rather than the mock defined below.
+const actualSupabase = require('../utils/supabase') as Record<string, unknown>;
+
 jest.mock('../utils/supabase', () => ({
+  ...actualSupabase,
   listOtaUpdates: (...args: any[]) => mockList(...args),
   updateOtaUpdate: (...args: any[]) => mockUpdate(...args),
 }));
@@ -26,6 +38,9 @@ beforeEach(() => {
 
 afterAll(() => {
   process.env = originalEnv;
+  // Restore the real module so this partial mock does not leak into other
+  // test files (bun module mocks are process-global).
+  jest.mock('../utils/supabase', () => actualSupabase);
 });
 
 describe('rollback command', () => {
