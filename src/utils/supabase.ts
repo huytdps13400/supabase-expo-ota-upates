@@ -9,8 +9,53 @@ import type {
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 500;
 
+/** HTTP status codes that are safe to retry (transient server/network errors). */
+const RETRYABLE_STATUS = new Set([500, 502, 503, 504, 522]);
+
 interface UploadResult {
   url: string;
+}
+
+/**
+ * Perform a fetch with retry + exponential backoff on transient failures.
+ *
+ * Retries on thrown network errors and on retryable HTTP status codes
+ * (5xx). Non-retryable responses (e.g. 4xx) are returned to the caller as-is
+ * so it can inspect the status/body. Used by all REST/RPC helpers below so
+ * retry behaviour is consistent instead of being duplicated per call.
+ */
+export async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  opts: { retries?: number; delayMs?: number } = {}
+): Promise<Response> {
+  const retries = opts.retries ?? MAX_RETRIES;
+  const delayMs = opts.delayMs ?? RETRY_DELAY_MS;
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url, init);
+
+      if (RETRYABLE_STATUS.has(res.status) && attempt < retries) {
+        await sleep(delayMs * attempt);
+        continue;
+      }
+
+      return res;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < retries) {
+        await sleep(delayMs * attempt);
+        continue;
+      }
+      throw lastError;
+    }
+  }
+
+  // Unreachable in practice (loop either returns or throws), but keeps the
+  // type checker satisfied that we never fall through without a value.
+  throw lastError ?? new Error('fetchWithRetry: exhausted retries');
 }
 
 /**
@@ -35,50 +80,15 @@ export async function uploadFile(
     'x-upsert': 'true',
   };
 
-  let lastError: Error | null = null;
+  const res = await fetchWithRetry(url, {
+    method: 'POST',
+    headers,
+    body: fileBuffer as unknown as BodyInit,
+  });
 
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: fileBuffer as unknown as BodyInit,
-      });
-
-      if (!res.ok) {
-        const body = await res.text();
-        const message = `Upload failed ${res.status}: ${body}`;
-
-        // Retry on server errors
-        if (
-          [500, 502, 503, 504, 522].includes(res.status) &&
-          attempt < MAX_RETRIES
-        ) {
-          lastError = new Error(message);
-          await sleep(RETRY_DELAY_MS * attempt);
-          continue;
-        }
-
-        throw new Error(message);
-      }
-
-      return {
-        url: `${supabaseUrl}/storage/v1/object/public/${bucket}/${encodePath(
-          storagePath
-        )}`,
-      };
-    } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
-      if (attempt < MAX_RETRIES) {
-        await sleep(RETRY_DELAY_MS * attempt);
-        continue;
-      }
-      throw lastError;
-    }
-  }
-
-  if (lastError) {
-    throw lastError;
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Upload failed ${res.status}: ${body}`);
   }
 
   return {
@@ -104,7 +114,7 @@ export async function insertOtaUpdate(
     'Prefer': 'return=representation',
   };
 
-  const res = await fetch(url, {
+  const res = await fetchWithRetry(url, {
     method: 'POST',
     headers,
     body: JSON.stringify(payload),
@@ -147,7 +157,7 @@ export async function insertOtaAssets(
   }
 
   for (const batch of batches) {
-    const res = await fetch(url, {
+    const res = await fetchWithRetry(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(batch),
@@ -229,7 +239,7 @@ export async function listOtaUpdates(
     apikey: serviceKey,
   };
 
-  const res = await fetch(url, { headers });
+  const res = await fetchWithRetry(url, { headers });
 
   if (!res.ok) {
     const body = await res.text();
@@ -256,7 +266,7 @@ export async function updateOtaUpdate(
     'Prefer': 'return=representation',
   };
 
-  const res = await fetch(url, {
+  const res = await fetchWithRetry(url, {
     method: 'PATCH',
     headers,
     body: JSON.stringify(patch),
@@ -268,19 +278,26 @@ export async function updateOtaUpdate(
   }
 }
 
+export interface UpdateStats {
+  total_devices: number;
+  applied: number;
+  failed: number;
+  pending: number;
+}
+
 /**
- * Get update stats (device update tracking)
+ * Get update stats (device update tracking).
+ *
+ * Normalizes the columns returned by the `get_update_stats` RPC
+ * (`total_devices`, `successful_updates`, `failed_updates`,
+ * `pending_updates`) into a stable shape. Returns null if the RPC is
+ * unavailable or errors.
  */
 export async function getUpdateStats(
   supabaseUrl: string,
   serviceKey: string,
   updateId: string
-): Promise<{
-  total_devices: number;
-  pending: number;
-  applied: number;
-  failed: number;
-} | null> {
+): Promise<UpdateStats | null> {
   const url = `${supabaseUrl}/rest/v1/rpc/get_update_stats`;
   const headers = {
     'Authorization': `Bearer ${serviceKey}`,
@@ -289,7 +306,7 @@ export async function getUpdateStats(
   };
 
   try {
-    const res = await fetch(url, {
+    const res = await fetchWithRetry(url, {
       method: 'POST',
       headers,
       body: JSON.stringify({ p_update_id: updateId }),
@@ -297,7 +314,15 @@ export async function getUpdateStats(
 
     if (!res.ok) return null;
     const data = await res.json();
-    return data?.[0] ?? null;
+    const row = data?.[0];
+    if (!row) return null;
+
+    return {
+      total_devices: Number(row.total_devices ?? 0),
+      applied: Number(row.successful_updates ?? row.applied ?? 0),
+      failed: Number(row.failed_updates ?? row.failed ?? 0),
+      pending: Number(row.pending_updates ?? row.pending ?? 0),
+    };
   } catch {
     return null;
   }

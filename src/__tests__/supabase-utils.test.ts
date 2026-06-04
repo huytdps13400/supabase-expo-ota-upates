@@ -124,11 +124,17 @@ describe('getUpdateStats', () => {
     mockFetch.mockReset();
   });
 
-  it('should call RPC endpoint', async () => {
+  it('should call RPC endpoint and normalize columns', async () => {
+    // The get_update_stats RPC returns these column names.
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => [
-        { total_devices: 100, pending: 10, applied: 85, failed: 5 },
+        {
+          total_devices: 100,
+          successful_updates: 85,
+          failed_updates: 5,
+          pending_updates: 10,
+        },
       ],
     });
 
@@ -142,9 +148,9 @@ describe('getUpdateStats', () => {
     expect(calledUrl).toContain('/rest/v1/rpc/get_update_stats');
     expect(stats).toEqual({
       total_devices: 100,
-      pending: 10,
       applied: 85,
       failed: 5,
+      pending: 10,
     });
   });
 
