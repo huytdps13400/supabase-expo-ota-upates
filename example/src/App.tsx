@@ -1,12 +1,15 @@
 import { Text, View, StyleSheet } from 'react-native';
-import { multiply } from 'supabase-expo-ota-updates';
-
-const result = multiply(3, 7);
+import { useOtaUpdate } from 'supabase-expo-ota-updates/runtime';
 
 export default function App() {
+  const { status, isUpdateAvailable } = useOtaUpdate();
+
   return (
     <View style={styles.container}>
-      <Text testID="result-text">Result: {result}</Text>
+      <Text testID="status-text">OTA status: {status}</Text>
+      <Text testID="available-text">
+        Update available: {isUpdateAvailable ? 'yes' : 'no'}
+      </Text>
     </View>
   );
 }
