@@ -231,6 +231,21 @@ Interactive terminal dashboard for managing updates:
 npx supabase-expo-ota-updates console
 ```
 
+## Web Console
+
+A browser dashboard to list updates and toggle them active/inactive, served by
+the optional `ota-console` edge function. The Supabase service key stays on the
+server; the browser only holds a console secret you set:
+
+```bash
+supabase secrets set OTA_CONSOLE_SECRET=$(openssl rand -hex 24)
+supabase functions deploy ota-console
+```
+
+Then open `https://<project>.functions.supabase.co/ota-console` and sign in with
+the secret. When `OTA_CONSOLE_SECRET` is not set, the console is disabled (fails
+closed).
+
 ## Plugin Options
 
 ```ts

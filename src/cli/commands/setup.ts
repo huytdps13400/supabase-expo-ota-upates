@@ -697,11 +697,17 @@ USING (bucket_id = 'ota-bundles');
         path.join(functionsDir, 'ota-cleanup', 'index.ts'),
         force
       );
-      copiedFromPackage = sharedOk || manifestOk || cleanupOk;
+      const consoleOk = copyTemplate(
+        path.join(srcFns, 'ota-console', 'index.ts'),
+        path.join(functionsDir, 'ota-console', 'index.ts'),
+        force
+      );
+      copiedFromPackage = sharedOk || manifestOk || cleanupOk || consoleOk;
       if (copiedFromPackage) {
         console.log('  ✓ Created: supabase/functions/_shared/manifest.ts');
         console.log('  ✓ Created: supabase/functions/ota-manifest/index.ts');
         console.log('  ✓ Created: supabase/functions/ota-cleanup/index.ts');
+        console.log('  ✓ Created: supabase/functions/ota-console/index.ts');
       }
     }
 
@@ -823,6 +829,16 @@ OTA_CLEANUP_MAX=50
         execSync('supabase functions deploy ota-cleanup', {
           stdio: 'inherit',
         });
+        // ota-console is optional; only deploy when it was scaffolded.
+        if (
+          fs.existsSync(
+            path.join(supabaseDir, 'functions', 'ota-console', 'index.ts')
+          )
+        ) {
+          execSync('supabase functions deploy ota-console', {
+            stdio: 'inherit',
+          });
+        }
       } catch {
         console.error('❌ Failed to deploy edge functions.');
         process.exit(1);
@@ -857,6 +873,9 @@ OTA_CLEANUP_MAX=50
     console.log(`${step}. Deploy edge functions:`);
     console.log('   supabase functions deploy ota-manifest');
     console.log('   supabase functions deploy ota-cleanup');
+    console.log(
+      '   supabase functions deploy ota-console   # optional web dashboard'
+    );
     console.log('');
     step++;
   } else {
