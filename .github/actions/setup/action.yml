@@ -23,10 +23,12 @@ runs:
 
     - name: Install dependencies
       if: steps.yarn-cache.outputs.cache-hit != 'true'
-      # Not --immutable: the example depends on the library via file:.., whose
-      # content hash derives from the built lib and is not reproducible across
-      # environments. Immutable installs reject the resulting lockfile drift.
-      run: yarn install
+      # --no-immutable is required: the example depends on the library via
+      # file:.., whose content hash derives from the freshly built lib and is
+      # not reproducible (it even differs between CI jobs). Yarn enables
+      # immutable installs automatically in CI, so it must be opted out
+      # explicitly or the lockfile drift fails the install.
+      run: yarn install --no-immutable
       shell: bash
 
     - name: Cache dependencies
