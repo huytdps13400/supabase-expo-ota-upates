@@ -1,0 +1,75 @@
+name: Release
+
+# Manual, one-click publish of the library to npm.
+#
+# Prerequisites:
+#   - Repository secret NPM_TOKEN: an npm automation token with publish rights
+#     for the `supabase-expo-ota-updates` package.
+#
+# What it does (delegates to scripts/publish-library.sh):
+#   1. Runs the full check suite (lint, typecheck, unit tests, pack dry-run).
+#   2. Bumps the version in package.json (patch/minor/major).
+#   3. Publishes to npm with the chosen dist-tag (runs `prepare` => builds lib/).
+#   4. Creates a `chore(release): vX.Y.Z` commit + tag and pushes them to main.
+on:
+  workflow_dispatch:
+    inputs:
+      release-type:
+        description: Semver bump to apply before publishing
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+      dist-tag:
+        description: npm dist-tag to publish under
+        type: string
+        default: latest
+
+# Needed so the release commit + tag can be pushed back to the repository.
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          # Full history so the release commit/tag can be created and pushed.
+          fetch-depth: 0
+
+      - name: Setup
+        uses: ./.github/actions/setup
+
+      - name: Configure npm authentication
+        # Writes ~/.npmrc with the auth token so `npm whoami` and `npm publish`
+        # (both invoked by the publish script) can authenticate.
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Build and publish
+        run: |
+          bash ./scripts/publish-library.sh \
+            --type "${{ inputs.release-type }}" \
+            --tag "${{ inputs.dist-tag }}" \
+            --allow-dirty \
+            --git-push \
+            --yes
+        env:
+          # Consumed by the .npmrc written by setup-node above.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
