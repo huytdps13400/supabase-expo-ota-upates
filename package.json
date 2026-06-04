@@ -29,6 +29,7 @@
     "src",
     "lib",
     "bin",
+    "supabase",
     "*.podspec",
     "!ios/build",
     "!android/build",
