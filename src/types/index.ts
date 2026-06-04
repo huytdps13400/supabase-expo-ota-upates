@@ -53,6 +53,8 @@ export interface PublishOptions {
   channel?: Channel;
   /** Skip the EXPO_PUBLIC_ENV vs channel consistency check */
   skipEnvCheck?: boolean;
+  /** Gzip the JS bundle before upload (experimental, opt-in) */
+  compress?: boolean;
   /** Runtime version override */
   runtimeVersion?: string;
   /** Storage bucket */

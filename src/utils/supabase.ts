@@ -67,18 +67,25 @@ export async function uploadFile(
   bucket: string,
   storagePath: string,
   fileBuffer: Buffer,
-  contentType: string
+  contentType: string,
+  opts: { contentEncoding?: string } = {}
 ): Promise<UploadResult> {
   const url = `${supabaseUrl}/storage/v1/object/${bucket}/${encodePath(
     storagePath
   )}`;
-  const headers = {
+  const headers: Record<string, string> = {
     'Authorization': `Bearer ${serviceKey}`,
     'apikey': serviceKey,
     'content-type': contentType,
     'cache-control': 'public, max-age=31536000, immutable',
     'x-upsert': 'true',
   };
+  // When the stored bytes are compressed, Supabase Storage echoes this header
+  // back so HTTP clients transparently decompress — the hash in the manifest
+  // still matches the original (decompressed) bundle.
+  if (opts.contentEncoding) {
+    headers['content-encoding'] = opts.contentEncoding;
+  }
 
   const res = await fetchWithRetry(url, {
     method: 'POST',

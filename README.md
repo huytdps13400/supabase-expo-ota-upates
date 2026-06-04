@@ -166,7 +166,7 @@ npx supabase-expo-ota-updates publish --platform ios [options]
 
 | Flag | Description |
 |------|-------------|
-| `--platform <ios\|android>` | Target platform (required) |
+| `--platform <ios\|android\|all>` | Target platform (`all` publishes both) (required) |
 | `--channel <name>` | Channel name |
 | `--force-update, -f` | Mark as mandatory update |
 | `--rollout <0-100>` | Gradual rollout percentage |
@@ -174,7 +174,15 @@ npx supabase-expo-ota-updates publish --platform ios [options]
 | `--app-version <semver>` | App version for matching |
 | `--runtime-version <ver>` | Override runtime version |
 | `--no-build` | Skip `expo export` step |
+| `--compress` | Gzip the JS bundle before upload (experimental) |
+| `--skip-env-check` | Don't warn when `EXPO_PUBLIC_ENV` differs from `--channel` |
 | `--dry-run` | Simulate without changes |
+
+> **Environment safety:** `babel-preset-expo` inlines `EXPO_PUBLIC_*` values into
+> the bundle at export time. `publish` warns if `EXPO_PUBLIC_ENV` does not match
+> the target `--channel`, since a mismatch (or a stale Metro cache) can ship the
+> wrong environment's config. The build always runs `expo export --clear` to
+> avoid stale inlined values.
 
 ### list
 
@@ -193,9 +201,19 @@ npx supabase-expo-ota-updates list [options]
 ### rollback
 
 ```bash
+# Reactivate the previous update for the channel
 npx supabase-expo-ota-updates rollback --platform ios --channel PROD
+
+# Activate a specific update
 npx supabase-expo-ota-updates rollback --platform ios --channel PROD --to <update-id>
+
+# Roll all devices back to the embedded (store) bundle via a protocol directive
+npx supabase-expo-ota-updates rollback --platform ios --channel PROD --to-embedded
 ```
+
+`--to-embedded` issues an Expo `rollBackToEmbedded` directive for each active
+runtime version. The directive applies only while it is newer than the latest
+update, so publishing a fix afterwards automatically supersedes it.
 
 ### console
 
@@ -307,9 +325,31 @@ The `init`/`setup` commands create:
 
 - **Gradual Rollout**: Deterministic hash-based rollout using device ID
 - **Mandatory Updates**: Force users to update before using the app
-- **Device Tracking**: Track update delivery per device
+- **Device Tracking**: Track update delivery per device (delivery success is
+  inferred when a device reports running the new bundle — no client call needed)
 - **Signed URLs**: Optional signed storage URLs for private buckets
+- **Rollback Directives**: `rollBackToEmbedded` support via the `ota_directives` table
 - **Scheduled Cleanup**: `pg_cron` integration for automatic old update removal
+
+The three `ota-manifest*` edge functions share a single handler
+(`supabase/functions/_shared/manifest.ts`); the channel-specific ones just pin a
+channel, so there is one place to maintain the protocol logic.
+
+### Code Signing
+
+Expo Updates can verify that manifests come from you. Configure the certificate
+on the client via the plugin (`codeSigningCertificate` / `codeSigningMetadata`),
+then give the manifest function the matching private key so it can sign responses:
+
+```bash
+# Set on the Supabase project (Edge Function secrets)
+supabase secrets set EXPO_OTA_CODE_SIGNING_PRIVATE_KEY="$(cat private-key.pem)"
+supabase secrets set EXPO_OTA_CODE_SIGNING_KEY_ID=main   # must match codeSigningMetadata.keyid
+```
+
+When the key is present, manifests (and rollback directives) carry an
+`expo-signature` header signed with `rsa-v1_5-sha256`. When it is absent, signing
+is skipped and updates are served unsigned (default).
 
 ## Existing Supabase Project
 

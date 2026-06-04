@@ -45,6 +45,7 @@ Publish Options:
   --message, -m       Update message/changelog
   --app-version       App version for semver matching
   --skip-env-check    Don't warn when EXPO_PUBLIC_ENV differs from --channel
+  --compress          Gzip the JS bundle before upload (experimental)
 
 List Options:
   --active            Show only active updates

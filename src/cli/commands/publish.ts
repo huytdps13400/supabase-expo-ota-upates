@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
+import { gzipSync } from 'zlib';
 import {
   loadConfig,
   getSupabaseUrl,
@@ -38,6 +39,8 @@ function parseArgs(args: string[]): PublishOptions {
       }
     } else if (arg === '--skip-env-check') {
       options.skipEnvCheck = true;
+    } else if (arg === '--compress') {
+      options.compress = true;
     } else if (arg === '--channel') {
       const channel = normalizeChannel(args[++i]);
       if (channel) {
@@ -359,7 +362,12 @@ async function publishForPlatform(
     throw new Error('Bundle file name is required');
   }
   const bundleBuffer = fs.readFileSync(bundlePath);
+  // Hash the original (uncompressed) bytes: expo-updates verifies the bundle
+  // after the HTTP client transparently decompresses it, so the hash must match
+  // the decompressed content regardless of the stored content-encoding.
   const bundleHash = sha256Base64Url(bundleBuffer);
+  const uploadBuffer = options.compress ? gzipSync(bundleBuffer) : bundleBuffer;
+  const bundleContentEncoding = options.compress ? 'gzip' : undefined;
   const bundleExt = path.extname(bundleFileName);
   const bundleKey = path.basename(bundleFileName, bundleExt);
   const bundleStoragePath = `${basePath}/bundles/${bundleFileName}`;
@@ -383,13 +391,20 @@ async function publishForPlatform(
 
   // Upload bundle
   console.log(`\nUploading bundle...`);
+  if (bundleContentEncoding) {
+    const ratio = Math.round((uploadBuffer.length / bundleBuffer.length) * 100);
+    console.log(
+      `  Compressed bundle: ${bundleBuffer.length} → ${uploadBuffer.length} bytes (${ratio}%)`
+    );
+  }
   const { url: bundleUrl } = await uploadFile(
     supabaseUrl,
     serviceKey,
     bucket,
     bundleStoragePath,
-    bundleBuffer,
-    bundleContentType
+    uploadBuffer,
+    bundleContentType,
+    { contentEncoding: bundleContentEncoding }
   );
   console.log(`✓ Bundle uploaded`);
 
