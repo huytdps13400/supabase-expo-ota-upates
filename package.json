@@ -4,9 +4,7 @@
   "description": "CLI and Expo config plugin for publishing OTA updates to Supabase Storage",
   "main": "./lib/module/src/index.js",
   "types": "./lib/module/src/index.d.ts",
-  "bin": {
-    "supabase-expo-ota-updates": "./bin/supabase-ota-updates.js"
-  },
+  "bin": "./bin/supabase-ota-updates.js",
   "exports": {
     ".": {
       "source": "./src/index.tsx",
@@ -93,12 +91,15 @@
     "@react-native/eslint-config": "0.83.0",
     "@release-it/conventional-changelog": "^10.0.1",
     "@types/jest": "^29.5.14",
+    "@types/node": "^22.0.0",
     "@types/react": "^19.1.12",
     "commitlint": "^19.8.1",
     "del-cli": "^6.0.0",
     "eslint": "^9.35.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
+    "expo": "^54.0.0",
+    "expo-updates": "^0.27.0",
     "jest": "^29.7.0",
     "lefthook": "^2.0.3",
     "prettier": "^2.8.8",

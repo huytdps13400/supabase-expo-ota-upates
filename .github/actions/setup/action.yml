@@ -9,6 +9,13 @@ runs:
       with:
         node-version-file: .nvmrc
 
+    - name: Setup Bun
+      # The test and build-web scripts run through bun (bun test / expo via
+      # bunx), which is not preinstalled on GitHub runners.
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      with:
+        bun-version: latest
+
     - name: Restore dependencies
       id: yarn-cache
       uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
