@@ -34,7 +34,7 @@ Commands:
 
 Global Options:
   --config <path>     Path to config file
-  --platform <name>   Target platform (ios|android)
+  --platform <name>   Target platform (ios|android|all)
   --channel <name>    Channel (any valid name)
   --dry-run           Simulate without making changes
   --help              Show this help
@@ -44,6 +44,7 @@ Publish Options:
   --rollout <0-100>   Percentage of devices to receive update (default: 100)
   --message, -m       Update message/changelog
   --app-version       App version for semver matching
+  --skip-env-check    Don't warn when EXPO_PUBLIC_ENV differs from --channel
 
 List Options:
   --active            Show only active updates
@@ -58,6 +59,7 @@ Examples:
   npx supabase-expo-ota-updates init --config-only --format ts
   npx supabase-expo-ota-updates setup --supabase-url https://<id>.supabase.co --deploy
   npx supabase-expo-ota-updates publish --platform ios --channel DEV
+  npx supabase-expo-ota-updates publish --platform all --channel PROD
   npx supabase-expo-ota-updates publish --platform ios --channel PROD -f --rollout 50
   npx supabase-expo-ota-updates list --platform ios --active
   npx supabase-expo-ota-updates rollback --platform ios --channel PROD

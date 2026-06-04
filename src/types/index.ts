@@ -47,10 +47,12 @@ export interface OtaPlatformConfig {
 }
 
 export interface PublishOptions {
-  /** Target platform */
-  platform: Platform;
+  /** Target platform ('all' publishes both ios and android) */
+  platform: Platform | 'all';
   /** Channel name (e.g., 'production', 'staging', 'beta') */
   channel?: Channel;
+  /** Skip the EXPO_PUBLIC_ENV vs channel consistency check */
+  skipEnvCheck?: boolean;
   /** Runtime version override */
   runtimeVersion?: string;
   /** Storage bucket */
