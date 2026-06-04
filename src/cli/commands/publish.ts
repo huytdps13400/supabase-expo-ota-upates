@@ -1,6 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
+import { gzipSync } from 'zlib';
+import { isValidRange } from '../../utils/semver';
 import {
   loadConfig,
   getSupabaseUrl,
@@ -33,9 +35,13 @@ function parseArgs(args: string[]): PublishOptions {
     const arg = args[i];
     if (arg === '--platform') {
       const value = args[++i];
-      if (value === 'ios' || value === 'android') {
+      if (value === 'ios' || value === 'android' || value === 'all') {
         options.platform = value;
       }
+    } else if (arg === '--skip-env-check') {
+      options.skipEnvCheck = true;
+    } else if (arg === '--compress') {
+      options.compress = true;
     } else if (arg === '--channel') {
       const channel = normalizeChannel(args[++i]);
       if (channel) {
@@ -71,14 +77,83 @@ function parseArgs(args: string[]): PublishOptions {
       options.message = args[++i];
     } else if (arg === '--app-version') {
       options.appVersion = args[++i];
+    } else if (arg === '--target-app-version') {
+      const range = args[++i];
+      if (range && !isValidRange(range)) {
+        throw new Error(`Invalid --target-app-version range: "${range}"`);
+      }
+      options.targetAppVersion = range;
     }
   }
 
   if (!options.platform) {
-    throw new Error('Missing required --platform (ios|android)');
+    throw new Error('Missing required --platform (ios|android|all)');
   }
 
   return options as PublishOptions;
+}
+
+/**
+ * Warn (or stay silent) about EXPO_PUBLIC_ENV not matching the publish channel.
+ *
+ * babel-preset-expo inlines EXPO_PUBLIC_* values into the JS bundle at export
+ * time, so publishing channel X while EXPO_PUBLIC_ENV points at Y produces a
+ * bundle that runs with Y's configuration. Catching this up front prevents the
+ * "stale env vars in OTA bundle" class of bugs.
+ */
+function checkChannelEnvConsistency(
+  channel: string,
+  options: PublishOptions
+): void {
+  if (options.skipEnvCheck) return;
+
+  const envChannel = normalizeChannel(process.env.EXPO_PUBLIC_ENV);
+
+  if (!envChannel) {
+    console.log(
+      '  ⚠️  EXPO_PUBLIC_ENV is not set; the bundle will inline whatever EXPO_PUBLIC_* values are in the current environment.'
+    );
+    return;
+  }
+
+  if (envChannel !== channel) {
+    console.warn(
+      `\n⚠️  EXPO_PUBLIC_ENV ("${envChannel}") does not match the publish channel ("${channel}").\n` +
+        '   babel-preset-expo inlines EXPO_PUBLIC_* values into the bundle at export time,\n' +
+        `   so this update may carry env vars meant for "${envChannel}" instead of "${channel}".\n` +
+        `   Set EXPO_PUBLIC_ENV=${channel} before publishing, or pass --skip-env-check to silence this.\n`
+    );
+  } else {
+    console.log(`  ✓ EXPO_PUBLIC_ENV matches channel (${channel})`);
+  }
+}
+
+/**
+ * Best-effort check that the exported JS bundle actually contains the current
+ * EXPO_PUBLIC_ENV value. Hermes bytecode (.hbc) is opaque and skipped.
+ */
+function verifyBundleEnv(
+  bundlePath: string,
+  channel: string,
+  options: PublishOptions
+): void {
+  if (options.skipEnvCheck) return;
+
+  const rawEnv = process.env.EXPO_PUBLIC_ENV;
+  if (!rawEnv) return;
+  if (path.extname(bundlePath) === '.hbc') return;
+
+  try {
+    const content = fs.readFileSync(bundlePath, 'utf-8');
+    if (!content.includes(rawEnv)) {
+      console.warn(
+        `  ⚠️  EXPO_PUBLIC_ENV value "${rawEnv}" was not found inlined in the JS bundle.\n` +
+          `     If this update targets channel "${channel}", re-run with a clean cache (expo export --clear).`
+      );
+    }
+  } catch {
+    // Unreadable / binary bundle — nothing to verify.
+  }
 }
 
 export async function publishCommand(args: string[]): Promise<void> {
@@ -104,9 +179,36 @@ export async function publishCommand(args: string[]): Promise<void> {
     );
   }
 
-  // Get platform
-  const platform: Platform = options.platform;
+  // Warn early if the inlined env does not match the target channel
+  checkChannelEnvConsistency(channel, options);
 
+  // Resolve target platform(s) — 'all' fans out to both
+  const platforms: Platform[] =
+    options.platform === 'all' ? ['ios', 'android'] : [options.platform];
+
+  for (const platform of platforms) {
+    if (platforms.length > 1) {
+      console.log(`\n${'='.repeat(60)}\n▶ Publishing ${platform}\n`);
+    }
+    await publishForPlatform(
+      platform,
+      channel,
+      options,
+      config,
+      supabaseUrl,
+      serviceKey
+    );
+  }
+}
+
+async function publishForPlatform(
+  platform: Platform,
+  channel: string,
+  options: PublishOptions,
+  config: Awaited<ReturnType<typeof loadConfig>>,
+  supabaseUrl: string,
+  serviceKey: string
+): Promise<void> {
   // Get runtime version
   const runtimeVersion = await deriveRuntimeVersionAsync(
     platform,
@@ -141,14 +243,14 @@ export async function publishCommand(args: string[]): Promise<void> {
     console.log(`\nBuilding update for ${platform}...`);
     if (!options.dryRun) {
       execSync(
-        `npx expo export --platform ${platform} --output-dir ${distDir}`,
+        `npx expo export --platform ${platform} --output-dir ${distDir} --clear`,
         {
           stdio: 'inherit',
         }
       );
     } else {
       console.log(
-        `[DRY RUN] Would run: npx expo export --platform ${platform} --output-dir ${distDir}`
+        `[DRY RUN] Would run: npx expo export --platform ${platform} --output-dir ${distDir} --clear`
       );
     }
   }
@@ -259,12 +361,20 @@ export async function publishCommand(args: string[]): Promise<void> {
     throw new Error(`Bundle file not found: ${bundlePath}`);
   }
 
+  // Best-effort: confirm the inlined EXPO_PUBLIC_ENV is present in the bundle
+  verifyBundleEnv(bundlePath, channel, options);
+
   // Calculate bundle hash
   if (!bundleFileName) {
     throw new Error('Bundle file name is required');
   }
   const bundleBuffer = fs.readFileSync(bundlePath);
+  // Hash the original (uncompressed) bytes: expo-updates verifies the bundle
+  // after the HTTP client transparently decompresses it, so the hash must match
+  // the decompressed content regardless of the stored content-encoding.
   const bundleHash = sha256Base64Url(bundleBuffer);
+  const uploadBuffer = options.compress ? gzipSync(bundleBuffer) : bundleBuffer;
+  const bundleContentEncoding = options.compress ? 'gzip' : undefined;
   const bundleExt = path.extname(bundleFileName);
   const bundleKey = path.basename(bundleFileName, bundleExt);
   const bundleStoragePath = `${basePath}/bundles/${bundleFileName}`;
@@ -288,13 +398,20 @@ export async function publishCommand(args: string[]): Promise<void> {
 
   // Upload bundle
   console.log(`\nUploading bundle...`);
+  if (bundleContentEncoding) {
+    const ratio = Math.round((uploadBuffer.length / bundleBuffer.length) * 100);
+    console.log(
+      `  Compressed bundle: ${bundleBuffer.length} → ${uploadBuffer.length} bytes (${ratio}%)`
+    );
+  }
   const { url: bundleUrl } = await uploadFile(
     supabaseUrl,
     serviceKey,
     bucket,
     bundleStoragePath,
-    bundleBuffer,
-    bundleContentType
+    uploadBuffer,
+    bundleContentType,
+    { contentEncoding: bundleContentEncoding }
   );
   console.log(`✓ Bundle uploaded`);
 
@@ -331,6 +448,8 @@ export async function publishCommand(args: string[]): Promise<void> {
   console.log('Inserting update record...');
   console.log(`  Force update: ${options.forceUpdate ? 'YES' : 'NO'}`);
   console.log(`  Rollout: ${options.rollout ?? 100}%`);
+  if (options.targetAppVersion)
+    console.log(`  Target app version: ${options.targetAppVersion}`);
   if (options.message) console.log(`  Message: ${options.message}`);
 
   const updatePayload: OtaUpdatePayload = {
@@ -350,6 +469,7 @@ export async function publishCommand(args: string[]): Promise<void> {
     rollout_percentage: options.rollout ?? 100,
     message: options.message,
     app_version: options.appVersion,
+    target_app_version: options.targetAppVersion,
   };
 
   const updateId = await insertOtaUpdate(

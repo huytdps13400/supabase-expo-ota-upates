@@ -387,6 +387,40 @@ serve(async (req) => {
 });
 `;
 
+/**
+ * Locate the installed package root (the directory whose package.json is named
+ * supabase-expo-ota-updates) so we can scaffold from the real, shipped backend
+ * templates instead of drifting embedded copies. Works from src (dev), the
+ * built lib/, and node_modules.
+ */
+function findPackageRoot(): string | null {
+  let dir = __dirname;
+  for (let i = 0; i < 8; i++) {
+    const pkgPath = path.join(dir, 'package.json');
+    if (fs.existsSync(pkgPath)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+        if (pkg.name === 'supabase-expo-ota-updates') return dir;
+      } catch {
+        // keep walking up
+      }
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
+/** Copy a file, creating parent directories and respecting the force flag. */
+function copyTemplate(src: string, dest: string, force: boolean): boolean {
+  if (!fs.existsSync(src)) return false;
+  if (fs.existsSync(dest) && !force) return false;
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.copyFileSync(src, dest);
+  return true;
+}
+
 function checkSupabaseCLI(): boolean {
   try {
     execSync('supabase --version', { stdio: 'pipe' });
@@ -580,6 +614,30 @@ export async function setupCommand(args: string[]): Promise<void> {
       console.log(`  ✓ Created: ${migrationFile}`);
     }
 
+    // Copy the channel-agnostic feature migrations (device tracking, rollout
+    // RPCs, rollback directives) so the scaffolded manifest's RPC calls resolve.
+    // The package's base migration is intentionally NOT copied — these run on
+    // top of the channel-agnostic base above.
+    const pkgRoot = findPackageRoot();
+    const featureMigrations = [
+      '20260206_add_hot_updater_features.sql',
+      '20260601_ota_enhancements.sql',
+      '20260602_target_app_version.sql',
+    ];
+    if (pkgRoot) {
+      for (const name of featureMigrations) {
+        const src = path.join(pkgRoot, 'supabase', 'migrations', name);
+        const dest = path.join(migrationsDir, name);
+        if (copyTemplate(src, dest, options.force === true)) {
+          console.log(`  ✓ Created: supabase/migrations/${name}`);
+        }
+      }
+    } else {
+      console.log(
+        '  ⚠️  Could not locate package templates; skipped feature migrations (device tracking / directives).'
+      );
+    }
+
     // Create seed file for storage bucket
     const seedFile = path.join(supabaseDir, 'seed.sql');
     const bucketSql = `
@@ -615,27 +673,61 @@ USING (bucket_id = 'ota-bundles');
     console.log('\n⚡ Setting up Edge Functions...');
 
     const functionsDir = path.join(supabaseDir, 'functions');
+    const pkgRoot = findPackageRoot();
+    const force = options.force === true;
 
-    // ota-manifest function
-    const manifestDir = path.join(functionsDir, 'ota-manifest');
-    if (!fs.existsSync(manifestDir)) {
-      fs.mkdirSync(manifestDir, { recursive: true });
-    }
-    const manifestFile = path.join(manifestDir, 'index.ts');
-    if (!fs.existsSync(manifestFile) || options.force) {
-      fs.writeFileSync(manifestFile, OTA_MANIFEST_FUNCTION, 'utf-8');
-      console.log(`  ✓ Created: supabase/functions/ota-manifest/index.ts`);
+    // Prefer copying the real, shipped backend (shared handler + thin wrapper)
+    // so scaffolded projects stay in sync with the library. Fall back to the
+    // self-contained embedded templates when the package can't be located.
+    let copiedFromPackage = false;
+    if (pkgRoot) {
+      const srcFns = path.join(pkgRoot, 'supabase', 'functions');
+      const sharedOk = copyTemplate(
+        path.join(srcFns, '_shared', 'manifest.ts'),
+        path.join(functionsDir, '_shared', 'manifest.ts'),
+        force
+      );
+      const manifestOk = copyTemplate(
+        path.join(srcFns, 'ota-manifest', 'index.ts'),
+        path.join(functionsDir, 'ota-manifest', 'index.ts'),
+        force
+      );
+      const cleanupOk = copyTemplate(
+        path.join(srcFns, 'ota-cleanup', 'index.ts'),
+        path.join(functionsDir, 'ota-cleanup', 'index.ts'),
+        force
+      );
+      const consoleOk = copyTemplate(
+        path.join(srcFns, 'ota-console', 'index.ts'),
+        path.join(functionsDir, 'ota-console', 'index.ts'),
+        force
+      );
+      copiedFromPackage = sharedOk || manifestOk || cleanupOk || consoleOk;
+      if (copiedFromPackage) {
+        console.log('  ✓ Created: supabase/functions/_shared/manifest.ts');
+        console.log('  ✓ Created: supabase/functions/ota-manifest/index.ts');
+        console.log('  ✓ Created: supabase/functions/ota-cleanup/index.ts');
+        console.log('  ✓ Created: supabase/functions/ota-console/index.ts');
+      }
     }
 
-    // ota-cleanup function
-    const cleanupDir = path.join(functionsDir, 'ota-cleanup');
-    if (!fs.existsSync(cleanupDir)) {
-      fs.mkdirSync(cleanupDir, { recursive: true });
-    }
-    const cleanupFile = path.join(cleanupDir, 'index.ts');
-    if (!fs.existsSync(cleanupFile) || options.force) {
-      fs.writeFileSync(cleanupFile, OTA_CLEANUP_FUNCTION, 'utf-8');
-      console.log(`  ✓ Created: supabase/functions/ota-cleanup/index.ts`);
+    if (!copiedFromPackage) {
+      // Embedded fallback (self-contained, no _shared import).
+      const manifestDir = path.join(functionsDir, 'ota-manifest');
+      const manifestFile = path.join(manifestDir, 'index.ts');
+      if (!fs.existsSync(manifestFile) || force) {
+        fs.mkdirSync(manifestDir, { recursive: true });
+        fs.writeFileSync(manifestFile, OTA_MANIFEST_FUNCTION, 'utf-8');
+        console.log(`  ✓ Created: supabase/functions/ota-manifest/index.ts`);
+      }
+
+      const cleanupDir = path.join(functionsDir, 'ota-cleanup');
+      const cleanupFile = path.join(cleanupDir, 'index.ts');
+      if (!fs.existsSync(cleanupFile) || force) {
+        fs.mkdirSync(cleanupDir, { recursive: true });
+        fs.writeFileSync(cleanupFile, OTA_CLEANUP_FUNCTION, 'utf-8');
+        console.log(`  ✓ Created: supabase/functions/ota-cleanup/index.ts`);
+      }
     }
   }
 
@@ -737,6 +829,16 @@ OTA_CLEANUP_MAX=50
         execSync('supabase functions deploy ota-cleanup', {
           stdio: 'inherit',
         });
+        // ota-console is optional; only deploy when it was scaffolded.
+        if (
+          fs.existsSync(
+            path.join(supabaseDir, 'functions', 'ota-console', 'index.ts')
+          )
+        ) {
+          execSync('supabase functions deploy ota-console', {
+            stdio: 'inherit',
+          });
+        }
       } catch {
         console.error('❌ Failed to deploy edge functions.');
         process.exit(1);
@@ -771,6 +873,9 @@ OTA_CLEANUP_MAX=50
     console.log(`${step}. Deploy edge functions:`);
     console.log('   supabase functions deploy ota-manifest');
     console.log('   supabase functions deploy ota-cleanup');
+    console.log(
+      '   supabase functions deploy ota-console   # optional web dashboard'
+    );
     console.log('');
     step++;
   } else {

@@ -10,6 +10,9 @@ import {
   listOtaUpdates,
   updateOtaUpdate,
   getUpdateStats,
+  fetchWithRetry,
+  insertRollbackDirective,
+  clearRollbackDirectives,
 } from '../utils/supabase';
 
 describe('listOtaUpdates', () => {
@@ -124,11 +127,17 @@ describe('getUpdateStats', () => {
     mockFetch.mockReset();
   });
 
-  it('should call RPC endpoint', async () => {
+  it('should call RPC endpoint and normalize columns', async () => {
+    // The get_update_stats RPC returns these column names.
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => [
-        { total_devices: 100, pending: 10, applied: 85, failed: 5 },
+        {
+          total_devices: 100,
+          successful_updates: 85,
+          failed_updates: 5,
+          pending_updates: 10,
+        },
       ],
     });
 
@@ -142,9 +151,9 @@ describe('getUpdateStats', () => {
     expect(calledUrl).toContain('/rest/v1/rpc/get_update_stats');
     expect(stats).toEqual({
       total_devices: 100,
-      pending: 10,
       applied: 85,
       failed: 5,
+      pending: 10,
     });
   });
 
@@ -171,5 +180,114 @@ describe('getUpdateStats', () => {
       'any-id'
     );
     expect(stats).toBeNull();
+  });
+});
+
+describe('fetchWithRetry', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  it('returns immediately on a successful response', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200 });
+
+    const res = await fetchWithRetry('https://x', {});
+    expect(res.status).toBe(200);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries on retryable 5xx then succeeds', async () => {
+    mockFetch
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValueOnce({ ok: true, status: 200 });
+
+    const res = await fetchWithRetry('https://x', {}, { delayMs: 1 });
+    expect(res.status).toBe(200);
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry non-retryable status (4xx)', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
+
+    const res = await fetchWithRetry('https://x', {}, { delayMs: 1 });
+    expect(res.status).toBe(404);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries on thrown network errors up to the limit', async () => {
+    mockFetch.mockRejectedValue(new Error('boom'));
+
+    await expect(
+      fetchWithRetry('https://x', {}, { retries: 3, delayMs: 1 })
+    ).rejects.toThrow('boom');
+    expect(mockFetch).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('insertRollbackDirective', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  it('POSTs a rollBackToEmbedded row to ota_directives', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 201 });
+
+    await insertRollbackDirective('https://test.supabase.co', 'key', {
+      channel: 'PROD',
+      platform: 'ios',
+      runtimeVersion: '1.0.0',
+    });
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toContain('/rest/v1/ota_directives');
+    expect(init.method).toBe('POST');
+    const body = JSON.parse(init.body);
+    expect(body).toMatchObject({
+      channel: 'PROD',
+      platform: 'ios',
+      runtime_version: '1.0.0',
+      type: 'rollBackToEmbedded',
+      is_active: true,
+    });
+  });
+
+  it('throws on non-ok response', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      text: async () => 'bad',
+    });
+
+    await expect(
+      insertRollbackDirective('https://test.supabase.co', 'key', {
+        channel: 'PROD',
+        platform: 'ios',
+        runtimeVersion: '1.0.0',
+      })
+    ).rejects.toThrow('Insert ota_directives failed 400');
+  });
+});
+
+describe('clearRollbackDirectives', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  it('PATCHes active directives to is_active=false', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 204 });
+
+    await clearRollbackDirectives(
+      'https://test.supabase.co',
+      'key',
+      'PROD',
+      'android'
+    );
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toContain('channel=eq.PROD');
+    expect(url).toContain('platform=eq.android');
+    expect(url).toContain('is_active=eq.true');
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(init.body)).toEqual({ is_active: false });
   });
 });

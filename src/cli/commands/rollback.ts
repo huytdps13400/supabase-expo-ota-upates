@@ -5,7 +5,11 @@ import {
   normalizeChannel,
   getDefaultChannel,
 } from '../../utils/config';
-import { listOtaUpdates, updateOtaUpdate } from '../../utils/supabase';
+import {
+  listOtaUpdates,
+  updateOtaUpdate,
+  insertRollbackDirective,
+} from '../../utils/supabase';
 import type { RollbackOptions } from '../../types';
 
 function parseArgs(args: string[]): RollbackOptions {
@@ -27,6 +31,8 @@ function parseArgs(args: string[]): RollbackOptions {
       options.config = args[++i];
     } else if (arg === '--to') {
       options.to = args[++i];
+    } else if (arg === '--to-embedded') {
+      options.toEmbedded = true;
     }
   }
 
@@ -66,6 +72,43 @@ export async function rollbackCommand(args: string[]): Promise<void> {
     isActive: true,
     limit: 5,
   });
+
+  // Roll back to the embedded bundle via protocol directives. This issues a
+  // rollBackToEmbedded directive for every runtime version that currently has
+  // an active update, plus deactivates those updates so devices stop receiving
+  // them. Publishing a newer update later automatically supersedes the directive.
+  if (options.toEmbedded) {
+    if (activeUpdates.length === 0) {
+      console.log('No active updates found; nothing to roll back to embedded.');
+      return;
+    }
+
+    const runtimeVersions = [
+      ...new Set(activeUpdates.map((u) => u.runtime_version)),
+    ];
+
+    for (const runtimeVersion of runtimeVersions) {
+      console.log(
+        `\nIssuing rollBackToEmbedded directive for runtime ${runtimeVersion}...`
+      );
+      await insertRollbackDirective(supabaseUrl, serviceKey, {
+        channel,
+        platform: options.platform,
+        runtimeVersion,
+      });
+      console.log('  Directive created.');
+    }
+
+    for (const update of activeUpdates) {
+      await updateOtaUpdate(supabaseUrl, serviceKey, update.id, {
+        is_active: false,
+      });
+    }
+    console.log(
+      `\nRollback to embedded complete (${runtimeVersions.length} runtime version(s)).`
+    );
+    return;
+  }
 
   if (activeUpdates.length === 0) {
     console.log('No active updates found. Nothing to rollback.');

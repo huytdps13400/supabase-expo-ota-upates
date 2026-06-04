@@ -47,10 +47,14 @@ export interface OtaPlatformConfig {
 }
 
 export interface PublishOptions {
-  /** Target platform */
-  platform: Platform;
+  /** Target platform ('all' publishes both ios and android) */
+  platform: Platform | 'all';
   /** Channel name (e.g., 'production', 'staging', 'beta') */
   channel?: Channel;
+  /** Skip the EXPO_PUBLIC_ENV vs channel consistency check */
+  skipEnvCheck?: boolean;
+  /** Gzip the JS bundle before upload (experimental, opt-in) */
+  compress?: boolean;
   /** Runtime version override */
   runtimeVersion?: string;
   /** Storage bucket */
@@ -73,6 +77,8 @@ export interface PublishOptions {
   message?: string;
   /** App version for semver matching */
   appVersion?: string;
+  /** Semver range the client app version must satisfy (e.g. '>=1.2.0 <2.0.0') */
+  targetAppVersion?: string;
 }
 
 export interface CleanupOptions {
@@ -187,6 +193,7 @@ export interface OtaUpdatePayload {
   rollout_percentage?: number;
   message?: string;
   app_version?: string;
+  target_app_version?: string;
 }
 
 export interface OtaAssetPayload {
@@ -221,6 +228,8 @@ export interface RollbackOptions {
   config?: string;
   /** Specific update ID to rollback to */
   to?: string;
+  /** Roll devices back to the embedded bundle via a protocol directive */
+  toEmbedded?: boolean;
 }
 
 export interface ListOptions {
