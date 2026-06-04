@@ -329,6 +329,77 @@ export async function getUpdateStats(
 }
 
 /**
+ * Insert a rollBackToEmbedded directive for one runtime version.
+ *
+ * Clients on the matching channel/platform/runtimeVersion will be instructed to
+ * roll back to their embedded bundle until a newer update (or no active
+ * directive) supersedes it.
+ */
+export async function insertRollbackDirective(
+  supabaseUrl: string,
+  serviceKey: string,
+  target: {
+    channel: string;
+    platform: string;
+    runtimeVersion: string;
+    message?: string;
+  }
+): Promise<void> {
+  const url = `${supabaseUrl}/rest/v1/ota_directives`;
+  const headers = {
+    'Authorization': `Bearer ${serviceKey}`,
+    'apikey': serviceKey,
+    'content-type': 'application/json',
+  };
+
+  const res = await fetchWithRetry(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      channel: target.channel,
+      platform: target.platform,
+      runtime_version: target.runtimeVersion,
+      type: 'rollBackToEmbedded',
+      is_active: true,
+      message: target.message ?? null,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Insert ota_directives failed ${res.status}: ${body}`);
+  }
+}
+
+/**
+ * Deactivate all active rollback directives for a channel/platform.
+ */
+export async function clearRollbackDirectives(
+  supabaseUrl: string,
+  serviceKey: string,
+  channel: string,
+  platform: string
+): Promise<void> {
+  const url = `${supabaseUrl}/rest/v1/ota_directives?channel=eq.${channel}&platform=eq.${platform}&is_active=eq.true`;
+  const headers = {
+    'Authorization': `Bearer ${serviceKey}`,
+    'apikey': serviceKey,
+    'content-type': 'application/json',
+  };
+
+  const res = await fetchWithRetry(url, {
+    method: 'PATCH',
+    headers,
+    body: JSON.stringify({ is_active: false }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Clear ota_directives failed ${res.status}: ${body}`);
+  }
+}
+
+/**
  * Test manifest endpoint
  */
 export async function testManifestEndpoint(

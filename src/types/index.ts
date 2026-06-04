@@ -223,6 +223,8 @@ export interface RollbackOptions {
   config?: string;
   /** Specific update ID to rollback to */
   to?: string;
+  /** Roll devices back to the embedded bundle via a protocol directive */
+  toEmbedded?: boolean;
 }
 
 export interface ListOptions {

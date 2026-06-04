@@ -53,6 +53,7 @@ List Options:
 
 Rollback Options:
   --to <update-id>    Rollback to a specific update ID
+  --to-embedded       Roll devices back to the embedded bundle (directive)
 
 Examples:
   npx supabase-expo-ota-updates init
