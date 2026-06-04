@@ -44,6 +44,7 @@ Publish Options:
   --rollout <0-100>   Percentage of devices to receive update (default: 100)
   --message, -m       Update message/changelog
   --app-version       App version for semver matching
+  --target-app-version <range>  Semver range the client app must satisfy
   --skip-env-check    Don't warn when EXPO_PUBLIC_ENV differs from --channel
   --compress          Gzip the JS bundle before upload (experimental)
 

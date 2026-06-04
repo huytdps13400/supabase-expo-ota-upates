@@ -62,6 +62,92 @@ const normalizeChannel = (raw: string | null) =>
   raw ? raw.trim().toUpperCase() : null;
 
 // ---------------------------------------------------------------------------
+// Minimal semver range matching (mirrors src/utils/semver.ts). Supports
+// '*'/'', exact, >=,>,<=,<,=, ^, ~, wildcards (1.x, 1.2.x), space-AND, '||'-OR.
+// ---------------------------------------------------------------------------
+
+function parseVersion(input: string): [number, number, number] | null {
+  if (!input) return null;
+  const cleaned = input.trim().replace(/^v/i, '').split(/[-+]/)[0];
+  const parts = cleaned.split('.');
+  if (parts.length === 0 || parts.length > 3) return null;
+  const nums: number[] = [];
+  for (let i = 0; i < 3; i++) {
+    const n = Number(parts[i] ?? '0');
+    if (!Number.isInteger(n) || n < 0) return null;
+    nums.push(n);
+  }
+  return [nums[0], nums[1], nums[2]];
+}
+
+function cmpVersion(
+  a: [number, number, number],
+  b: [number, number, number]
+): number {
+  for (let i = 0; i < 3; i++) {
+    if (a[i] !== b[i]) return a[i] < b[i] ? -1 : 1;
+  }
+  return 0;
+}
+
+function satisfiesComparator(
+  v: [number, number, number],
+  comparator: string
+): boolean {
+  const token = comparator.trim();
+  if (!token || token === '*' || token === 'x' || token === 'X') return true;
+
+  if (/^\d+\.[xX*]$/.test(token)) {
+    return v[0] === Number(token.split('.')[0]);
+  }
+  if (/^\d+\.\d+\.[xX*]$/.test(token)) {
+    const [maj, min] = token.split('.');
+    return v[0] === Number(maj) && v[1] === Number(min);
+  }
+
+  const m = token.match(/^(>=|<=|>|<|=|\^|~)?\s*(.+)$/);
+  if (!m) return false;
+  const op = m[1] ?? '=';
+  const target = parseVersion(m[2]);
+  if (!target) return false;
+  const c = cmpVersion(v, target);
+
+  switch (op) {
+    case '>':
+      return c > 0;
+    case '>=':
+      return c >= 0;
+    case '<':
+      return c < 0;
+    case '<=':
+      return c <= 0;
+    case '=':
+      return c === 0;
+    case '^':
+      if (c < 0) return false;
+      if (target[0] > 0) return v[0] === target[0];
+      if (target[1] > 0) return v[0] === 0 && v[1] === target[1];
+      return v[0] === 0 && v[1] === 0 && v[2] === target[2];
+    case '~':
+      if (c < 0) return false;
+      return v[0] === target[0] && v[1] === target[1];
+    default:
+      return false;
+  }
+}
+
+function satisfiesRange(version: string, range: string): boolean {
+  if (!range || range.trim() === '' || range.trim() === '*') return true;
+  const parsed = parseVersion(version);
+  if (!parsed) return false;
+  return range.split('||').some((group) => {
+    const comparators = group.trim().split(/\s+/).filter(Boolean);
+    if (comparators.length === 0) return true;
+    return comparators.every((c) => satisfiesComparator(parsed, c));
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Code signing (optional)
 // ---------------------------------------------------------------------------
 
@@ -272,6 +358,8 @@ export function createManifestHandler(
     const currentBundleId =
       req.headers.get('x-bundle-id') || url.searchParams.get('bundleId');
     const acceptSignedUrl = req.headers.get('x-accept-signed-url') === 'true';
+    const appVersion =
+      req.headers.get('x-app-version') || url.searchParams.get('appVersion');
 
     if (!platform || !runtimeVersion) {
       return new Response(
@@ -336,6 +424,24 @@ export function createManifestHandler(
     const shouldUpdate = update.should_update !== false && update.is_active;
     if (!shouldUpdate) {
       return new Response(null, { status: 204, headers });
+    }
+
+    // Optional semver app-version targeting. Only applied when the client sends
+    // x-app-version, so default expo-updates clients are unaffected.
+    if (appVersion) {
+      let targetRange = update.target_app_version as string | null | undefined;
+      // The rollout RPC does not return this column; fetch it on demand.
+      if (targetRange === undefined) {
+        const { data } = await supabase
+          .from('ota_updates')
+          .select('target_app_version')
+          .eq('id', update.id)
+          .maybeSingle();
+        targetRange = data?.target_app_version ?? null;
+      }
+      if (targetRange && !satisfiesRange(appVersion, targetRange)) {
+        return new Response(null, { status: 204, headers });
+      }
     }
 
     const { data: assets, error: assetsError } = await supabase

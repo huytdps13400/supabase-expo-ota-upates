@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import { gzipSync } from 'zlib';
+import { isValidRange } from '../../utils/semver';
 import {
   loadConfig,
   getSupabaseUrl,
@@ -76,6 +77,12 @@ function parseArgs(args: string[]): PublishOptions {
       options.message = args[++i];
     } else if (arg === '--app-version') {
       options.appVersion = args[++i];
+    } else if (arg === '--target-app-version') {
+      const range = args[++i];
+      if (range && !isValidRange(range)) {
+        throw new Error(`Invalid --target-app-version range: "${range}"`);
+      }
+      options.targetAppVersion = range;
     }
   }
 
@@ -441,6 +448,8 @@ async function publishForPlatform(
   console.log('Inserting update record...');
   console.log(`  Force update: ${options.forceUpdate ? 'YES' : 'NO'}`);
   console.log(`  Rollout: ${options.rollout ?? 100}%`);
+  if (options.targetAppVersion)
+    console.log(`  Target app version: ${options.targetAppVersion}`);
   if (options.message) console.log(`  Message: ${options.message}`);
 
   const updatePayload: OtaUpdatePayload = {
@@ -460,6 +469,7 @@ async function publishForPlatform(
     rollout_percentage: options.rollout ?? 100,
     message: options.message,
     app_version: options.appVersion,
+    target_app_version: options.targetAppVersion,
   };
 
   const updateId = await insertOtaUpdate(

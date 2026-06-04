@@ -77,6 +77,8 @@ export interface PublishOptions {
   message?: string;
   /** App version for semver matching */
   appVersion?: string;
+  /** Semver range the client app version must satisfy (e.g. '>=1.2.0 <2.0.0') */
+  targetAppVersion?: string;
 }
 
 export interface CleanupOptions {
@@ -191,6 +193,7 @@ export interface OtaUpdatePayload {
   rollout_percentage?: number;
   message?: string;
   app_version?: string;
+  target_app_version?: string;
 }
 
 export interface OtaAssetPayload {

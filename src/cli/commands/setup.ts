@@ -622,6 +622,7 @@ export async function setupCommand(args: string[]): Promise<void> {
     const featureMigrations = [
       '20260206_add_hot_updater_features.sql',
       '20260601_ota_enhancements.sql',
+      '20260602_target_app_version.sql',
     ];
     if (pkgRoot) {
       for (const name of featureMigrations) {

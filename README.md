@@ -172,11 +172,19 @@ npx supabase-expo-ota-updates publish --platform ios [options]
 | `--rollout <0-100>` | Gradual rollout percentage |
 | `--message, -m <text>` | Update changelog |
 | `--app-version <semver>` | App version for matching |
+| `--target-app-version <range>` | Only serve to app versions in this semver range |
 | `--runtime-version <ver>` | Override runtime version |
 | `--no-build` | Skip `expo export` step |
 | `--compress` | Gzip the JS bundle before upload (experimental) |
 | `--skip-env-check` | Don't warn when `EXPO_PUBLIC_ENV` differs from `--channel` |
 | `--dry-run` | Simulate without changes |
+
+> **App-version targeting (`--target-app-version`):** stores a semver range
+> (e.g. `>=1.2.0 <2.0.0`, `1.x`, `^1.4.0`) on the update. The manifest only
+> applies the filter when the request carries an `x-app-version` header.
+> Stock `expo-updates` does **not** send this header, so use this with a custom
+> manifest request (or the query param `?appVersion=`); for native exact-version
+> targeting prefer `runtimeVersionPolicy: 'appVersion'`.
 
 > **Environment safety:** `babel-preset-expo` inlines `EXPO_PUBLIC_*` values into
 > the bundle at export time. `publish` warns if `EXPO_PUBLIC_ENV` does not match
