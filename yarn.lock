@@ -12861,8 +12861,8 @@ __metadata:
   linkType: soft
 
 "supabase-expo-ota-updates@file:..::locator=supabase-expo-ota-updates-example%40workspace%3Aexample":
-  version: 0.3.0
-  resolution: "supabase-expo-ota-updates@file:..#..::hash=7be400&locator=supabase-expo-ota-updates-example%40workspace%3Aexample"
+  version: 0.1.0
+  resolution: "supabase-expo-ota-updates@file:..#..::hash=31b22f&locator=supabase-expo-ota-updates-example%40workspace%3Aexample"
   peerDependencies:
     expo: ">=50.0.0"
     expo-updates: ">=0.24.0"
@@ -12873,7 +12873,7 @@ __metadata:
       optional: false
   bin:
     supabase-expo-ota-updates: ./bin/supabase-ota-updates.js
-  checksum: 10c0/1e3fdb4cde04518e8fdcd98c23ae5b45cfe4410a57446e480cfc33d4b1f7552fcbdd449a547a9697074490aa163e585a0454b1549ca776764d93c2d7008b1749
+  checksum: 10c0/0f35c6357ba8bcab2a18faf0ed0ad8f804f5ed06581d2f7d8381907609a7a8cf491bb6155e9f1a6380597be8eda585c6a87ccef17e6ab0609677bfe746ead3b3
   languageName: node
   linkType: hard
 

@@ -4,7 +4,9 @@
   "description": "CLI and Expo config plugin for publishing OTA updates to Supabase Storage",
   "main": "./lib/module/src/index.js",
   "types": "./lib/module/src/index.d.ts",
-  "bin": "./bin/supabase-ota-updates.js",
+  "bin": {
+    "supabase-expo-ota-updates": "./bin/supabase-ota-updates.js"
+  },
   "exports": {
     ".": {
       "source": "./src/index.tsx",

@@ -23,7 +23,10 @@ runs:
 
     - name: Install dependencies
       if: steps.yarn-cache.outputs.cache-hit != 'true'
-      run: yarn install --immutable
+      # Not --immutable: the example depends on the library via file:.., whose
+      # content hash derives from the built lib and is not reproducible across
+      # environments. Immutable installs reject the resulting lockfile drift.
+      run: yarn install
       shell: bash
 
     - name: Cache dependencies
